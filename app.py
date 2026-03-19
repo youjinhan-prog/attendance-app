@@ -7,9 +7,6 @@ app = Flask(__name__, static_folder='static')
 
 DB_PATH = os.environ.get('DB_PATH', 'attendance.db')
 
-# ─────────────────────────────────────────
-#  DB SETUP
-# ─────────────────────────────────────────
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -45,16 +42,10 @@ def init_db():
 
 init_db()
 
-# ─────────────────────────────────────────
-#  FRONTEND
-# ─────────────────────────────────────────
 @app.route('/')
 def index():
     return send_from_directory('static', 'index.html')
 
-# ─────────────────────────────────────────
-#  SETTINGS
-# ─────────────────────────────────────────
 @app.route('/api/settings', methods=['GET'])
 def get_settings():
     with get_db() as conn:
@@ -69,9 +60,6 @@ def update_settings():
             conn.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?,?)', (k, v))
     return jsonify({'ok': True})
 
-# ─────────────────────────────────────────
-#  ADMIN LOGIN
-# ─────────────────────────────────────────
 @app.route('/api/admin/login', methods=['POST'])
 def admin_login():
     data = request.json or {}
@@ -81,9 +69,6 @@ def admin_login():
             return jsonify({'ok': True})
     return jsonify({'ok': False, 'error': '비밀번호가 올바르지 않습니다'}), 401
 
-# ─────────────────────────────────────────
-#  EMPLOYEES
-# ─────────────────────────────────────────
 @app.route('/api/employees', methods=['GET'])
 def get_employees():
     with get_db() as conn:
@@ -113,20 +98,23 @@ def delete_employee(emp_id):
         conn.execute('DELETE FROM employees WHERE id=?', (emp_id,))
     return jsonify({'ok': True})
 
-# ─────────────────────────────────────────
-#  ATTENDANCE
-# ─────────────────────────────────────────
 @app.route('/api/attendance', methods=['GET'])
 def get_attendance():
-    date  = request.args.get('date')
-    month = request.args.get('month')   # YYYY-MM
+    date   = request.args.get('date')
+    month  = request.args.get('month')
     emp_id = request.args.get('employee_id')
 
-    query, params = 'SELECT * FROM attendance WHERE 1=1', []
-    if date:   query += ' AND date=?';           params.append(date)
-    if month:  query += ' AND date LIKE ?';      params.append(month + '%')
-    if emp_id: query += ' AND employee_id=?';    params.append(emp_id)
-    query += ' ORDER BY date'
+    query = '''
+        SELECT a.*, e.name, e.department
+        FROM attendance a
+        JOIN employees e ON a.employee_id = e.id
+        WHERE 1=1
+    '''
+    params = []
+    if date:   query += ' AND a.date=?';        params.append(date)
+    if month:  query += ' AND a.date LIKE ?';   params.append(month + '%')
+    if emp_id: query += ' AND a.employee_id=?'; params.append(emp_id)
+    query += ' ORDER BY a.date, e.name'
 
     with get_db() as conn:
         rows = conn.execute(query, params).fetchall()
@@ -160,15 +148,12 @@ def checkout():
         ).fetchone()
         if not rec:
             return jsonify({'error': '출근 기록이 없습니다'}), 400
-
         ws = conn.execute("SELECT value FROM settings WHERE key='work_start'").fetchone()['value']
         we = conn.execute("SELECT value FROM settings WHERE key='work_end'").fetchone()['value']
-
         check_in = rec['check_in']
-        if check_in > ws:     status = '지각'
-        elif time < we:       status = '조퇴'
-        else:                 status = '정상'
-
+        if check_in > ws:   status = '지각'
+        elif time < we:     status = '조퇴'
+        else:               status = '정상'
         conn.execute(
             'UPDATE attendance SET check_out=?, status=? WHERE employee_id=? AND date=?',
             (time, status, emp_id, date)
@@ -196,9 +181,6 @@ def update_attendance():
             )
     return jsonify({'ok': True})
 
-# ─────────────────────────────────────────
-#  RUN
-# ─────────────────────────────────────────
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
