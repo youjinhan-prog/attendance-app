@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>출퇴근 관리 시스템</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; background:#f0f4f8; color:#2d3748; }
+
+.header { background:linear-gradient(135deg,#1a365d,#2b6cb0); color:white; padding:14px 24px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 12px rgba(0,0,0,.25); }
+.header-left h1 { font-size:1.15rem; font-weight:700; }
+.header-left .sub { font-size:.75rem; opacity:.7; margin-top:2px; }
+.header-right { display:flex; align-items:center; gap:12px; }
+.live-time { font-size:1.6rem; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:1px; }
+.admin-badge { background:#f6e05e; color:#744210; padding:3px 10px; border-radius:12px; font-size:.72rem; font-weight:700; }
+.logout-btn { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); color:white; padding:5px 12px; border-radius:6px; cursor:pointer; font-size:.78rem; }
+.logout-btn:hover { background:rgba(255,255,255,.25); }
+
+.nav { background:white; display:flex; border-bottom:2px solid #e2e8f0; overflow-x:auto; }
+.nav-btn { flex-shrink:0; padding:13px 20px; border:none; background:none; cursor:pointer; font-size:.88rem; color:#718096; border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .2s; }
+.nav-btn.active { color:#2b6cb0; border-bottom-color:#2b6cb0; font-weight:700; }
+.nav-btn:hover:not(.active) { color:#2b6cb0; background:#f7fafc; }
+
+.page { display:none; padding:24px; max-width:1200px; margin:0 auto; }
+.page.active { display:block; }
+
+.card { background:white; border-radius:14px; box-shadow:0 2px 12px rgba(0,0,0,.07); }
+
+/* Check-in */
+.ci-wrap { max-width:460px; margin:0 auto; }
+.ci-card { padding:32px; }
+.ci-date { font-size:1rem; color:#718096; margin-bottom:4px; }
+.ci-datestr { font-size:1.1rem; font-weight:700; margin-bottom:28px; }
+.f-label { font-size:.8rem; color:#718096; font-weight:700; margin-bottom:6px; display:block; }
+.emp-sel { width:100%; padding:12px 16px; border:2px solid #e2e8f0; border-radius:10px; font-size:1rem; background:#f7fafc url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23718096' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E") no-repeat right 14px center; -webkit-appearance:none; cursor:pointer; }
+.emp-sel:focus { outline:none; border-color:#2b6cb0; background-color:white; }
+.status-box { background:#f7fafc; border-radius:10px; padding:16px; margin:16px 0; border:1px solid #e2e8f0; }
+.s-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-size:.9rem; }
+.s-row:last-child { margin-bottom:0; }
+.s-lbl { color:#718096; }
+.s-val { font-weight:600; }
+.btn-act { width:100%; padding:17px; border:none; border-radius:12px; font-size:1.1rem; font-weight:700; cursor:pointer; transition:all .2s; margin-bottom:10px; }
+.btn-in  { background:linear-gradient(135deg,#38a169,#276749); color:white; }
+.btn-in:hover  { transform:translateY(-2px); box-shadow:0 6px 20px rgba(56,161,105,.35); }
+.btn-out { background:linear-gradient(135deg,#e53e3e,#9b2c2c); color:white; }
+.btn-out:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(229,62,62,.35); }
+.btn-dis { background:#e2e8f0; color:#a0aec0; cursor:not-allowed; }
+.done-msg { text-align:center; padding:16px; color:#718096; font-size:.9rem; background:#f0fff4; border-radius:10px; border:1px solid #c6f6d5; }
+
+/* Badges */
+.badge { display:inline-block; padding:3px 10px; border-radius:20px; font-size:.78rem; font-weight:700; }
+.b-정상 { background:#c6f6d5; color:#276749; }
+.b-지각 { background:#feebc8; color:#c05621; }
+.b-조퇴 { background:#bee3f8; color:#2c5282; }
+.b-결근 { background:#fed7d7; color:#9b2c2c; }
+.b-미퇴근 { background:#e9d8fd; color:#553c9a; }
+.b-출근전 { background:#e2e8f0; color:#4a5568; }
+
+/* Admin Login */
+.al-wrap { max-width:360px; margin:0 auto; }
+.al-card { padding:36px; text-align:center; }
+.al-card h2 { font-size:1.15rem; margin-bottom:6px; }
+.al-card p { color:#718096; font-size:.85rem; margin-bottom:24px; }
+.pw-input { width:100%; padding:12px 16px; border:2px solid #e2e8f0; border-radius:10px; font-size:1rem; margin-bottom:12px; text-align:center; letter-spacing:4px; }
+.pw-input:focus { outline:none; border-color:#2b6cb0; }
+.btn-login { width:100%; padding:13px; background:#2b6cb0; color:white; border:none; border-radius:10px; font-size:1rem; font-weight:700; cursor:pointer; }
+.btn-login:hover { background:#2c5282; }
+.login-hint { font-size:.75rem; color:#a0aec0; margin-top:10px; }
+
+/* Stats */
+.stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(155px,1fr)); gap:14px; margin-bottom:22px; }
+.stat-card { padding:20px; border-radius:14px; text-align:center; box-shadow:0 2px 10px rgba(0,0,0,.06); }
+.stat-num { font-size:2.2rem; font-weight:800; margin-bottom:4px; }
+.stat-lbl { font-size:.8rem; color:#718096; font-weight:600; }
+.sc-total   { background:white; }        .sc-total   .stat-num { color:#2b6cb0; }
+.sc-present { background:#f0fff4; }      .sc-present .stat-num { color:#38a169; }
+.sc-late    { background:#fffaf0; }      .sc-late    .stat-num { color:#dd6b20; }
+.sc-absent  { background:#fff5f5; }      .sc-absent  .stat-num { color:#e53e3e; }
+.sc-notyet  { background:#f7fafc; }      .sc-notyet  .stat-num { color:#718096; }
+
+/* Table */
+.t-card { overflow:hidden; }
+.t-toolbar { padding:16px 20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; border-bottom:1px solid #e2e8f0; }
+.t-toolbar h3 { font-size:1rem; font-weight:700; }
+.f-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.f-sel, .f-inp { padding:7px 12px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:.83rem; }
+.f-sel:focus, .f-inp:focus { outline:none; border-color:#2b6cb0; }
+table { width:100%; border-collapse:collapse; }
+th { background:#f7fafc; padding:11px 14px; text-align:left; font-size:.76rem; color:#718096; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+td { padding:12px 14px; font-size:.88rem; border-bottom:1px solid #f0f4f8; vertical-align:middle; }
+tr:last-child td { border-bottom:none; }
+tbody tr:hover td { background:#fafbfc; }
+.empty td { text-align:center; color:#a0aec0; padding:36px; }
+
+/* Buttons */
+.btn { padding:7px 14px; border:none; border-radius:8px; cursor:pointer; font-size:.82rem; font-weight:700; transition:all .15s; }
+.btn-primary { background:#2b6cb0; color:white; } .btn-primary:hover { background:#2c5282; }
+.btn-success { background:#38a169; color:white; } .btn-success:hover { background:#276749; }
+.btn-danger  { background:#e53e3e; color:white; } .btn-danger:hover  { background:#9b2c2c; }
+.btn-outline { background:white; color:#2b6cb0; border:2px solid #2b6cb0; } .btn-outline:hover { background:#ebf4ff; }
+.btn-gray    { background:#e2e8f0; color:#4a5568; } .btn-gray:hover { background:#cbd5e0; }
+.btn-sm { padding:5px 10px; font-size:.76rem; }
+.btn-grp { display:flex; gap:6px; }
+
+/* Month nav */
+.m-nav { display:flex; align-items:center; gap:14px; margin-bottom:18px; flex-wrap:wrap; }
+.m-nav h2 { font-size:1.2rem; font-weight:700; min-width:120px; text-align:center; }
+
+/* Add form */
+.af-card { padding:20px; margin-bottom:18px; }
+.af-card h3 { font-size:.95rem; font-weight:700; margin-bottom:14px; }
+.f-form-row { display:grid; grid-template-columns:1fr 1fr auto; gap:10px; align-items:end; }
+.fg { display:flex; flex-direction:column; gap:4px; }
+.fg label { font-size:.78rem; color:#718096; font-weight:700; }
+.fg input, .fg select { padding:10px 12px; border:2px solid #e2e8f0; border-radius:8px; font-size:.9rem; }
+.fg input:focus, .fg select:focus { outline:none; border-color:#2b6cb0; }
+
+/* Settings */
+.s-sec { padding:20px; margin-bottom:16px; }
+.s-sec h3 { font-size:.95rem; font-weight:700; margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid #e2e8f0; }
+.s-row2 { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.s-row2:last-child { margin-bottom:0; }
+.s-row2 label { font-size:.88rem; color:#4a5568; }
+.s-row2 input { padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px; font-size:.88rem; width:140px; }
+.s-row2 input:focus { outline:none; border-color:#2b6cb0; }
+.data-btns { display:flex; gap:10px; flex-wrap:wrap; }
+
+/* Modal */
+.modal-ov { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:200; align-items:center; justify-content:center; }
+.modal-ov.open { display:flex; }
+.modal { background:white; border-radius:16px; padding:28px; max-width:420px; width:92%; max-height:85vh; overflow-y:auto; }
+.modal h3 { margin-bottom:18px; font-size:1.05rem; }
+.modal-foot { display:flex; gap:8px; justify-content:flex-end; margin-top:20px; }
+.modal .fg { margin-bottom:14px; }
+
+/* Toast */
+.toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(10px); background:#2d3748; color:white; padding:11px 22px; border-radius:10px; font-size:.88rem; z-index:999; opacity:0; transition:opacity .25s,transform .25s; pointer-events:none; white-space:nowrap; }
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* Loading spinner */
+.spinner { display:inline-block; width:18px; height:18px; border:3px solid rgba(255,255,255,.4); border-top-color:white; border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; margin-right:6px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+@media (max-width:640px) {
+  .page { padding:14px; }
+  .f-form-row { grid-template-columns:1fr; }
+  .stats-grid { grid-template-columns:repeat(2,1fr); }
+  .live-time { font-size:1.2rem; }
+  th, td { padding:9px 10px; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <h1>⏰ 출퇴근 관리 시스템</h1>
+    <div class="sub">직원 근태 관리 · 실시간 공유</div>
+  </div>
+  <div class="header-right" id="headerRight">
+    <div class="live-time" id="liveTime">00:00:00</div>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav class="nav">
+  <button class="nav-btn active" onclick="showPage('checkin')">📋 출퇴근</button>
+  <button class="nav-btn" onclick="showPage('dashboard')">📊 오늘 현황</button>
+  <button class="nav-btn" onclick="showPage('report')">📅 월별 리포트</button>
+  <button class="nav-btn" onclick="showPage('employees')">👥 직원 관리</button>
+  <button class="nav-btn" onclick="showPage('settings')">⚙️ 설정</button>
+</nav>
+
+<!-- ===== 출퇴근 ===== -->
+<div class="page active" id="page-checkin">
+  <div class="ci-wrap">
+    <div class="card ci-card">
+      <div class="ci-date">오늘 날짜</div>
+      <div class="ci-datestr" id="todayStr"></div>
+      <label class="f-label">직원 선택</label>
+      <select class="emp-sel" id="empSel" onchange="onEmpChange()">
+        <option value="">-- 이름을 선택하세요 --</option>
+      </select>
+      <div class="status-box" id="statusBox" style="display:none;">
+        <div class="s-row"><span class="s-lbl">출근 시간</span><span class="s-val" id="dIn">-</span></div>
+        <div class="s-row"><span class="s-lbl">퇴근 시간</span><span class="s-val" id="dOut">-</span></div>
+        <div class="s-row"><span class="s-lbl">상태</span><span class="s-val" id="dSt">-</span></div>
+      </div>
+      <div style="margin-top:20px;">
+        <button class="btn-act btn-in" id="btnIn" onclick="doCheckIn()">🟢 출근하기</button>
+        <button class="btn-act btn-out" id="btnOut" onclick="doCheckOut()" style="display:none;">🔴 퇴근하기</button>
+        <div class="done-msg" id="doneMsg" style="display:none;">✅ 오늘 출퇴근이 완료되었습니다!</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 오늘 현황 ===== -->
+<div class="page" id="page-dashboard">
+  <div id="d-login"><div class="al-wrap"><div class="card al-card">
+    <h2>🔐 관리자 로그인</h2><p>오늘 현황을 보려면 관리자 비밀번호를 입력하세요</p>
+    <input class="pw-input" type="password" id="pw1" placeholder="••••" onkeypress="if(event.key==='Enter')login(1)">
+    <button class="btn-login" onclick="login(1)">로그인</button>
+    <div class="login-hint">초기 비밀번호: admin1234</div>
+  </div></div></div>
+  <div id="d-content" style="display:none;">
+    <div class="stats-grid" id="statsGrid"></div>
+    <div class="card t-card">
+      <div class="t-toolbar">
+        <h3>출퇴근 현황 — <span id="dashDate"></span></h3>
+        <div class="f-row">
+          <select class="f-sel" id="dDept" onchange="renderDash()"><option value="">전체 부서</option></select>
+          <select class="f-sel" id="dStat" onchange="renderDash()">
+            <option value="">전체 상태</option>
+            <option>정상</option><option>지각</option><option>조퇴</option><option>결근</option><option>미퇴근</option><option>출근전</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="loadAndRenderDash()">새로고침</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table><thead><tr><th>이름</th><th>부서</th><th>출근</th><th>퇴근</th><th>근무시간</th><th>상태</th><th>관리</th></tr></thead>
+        <tbody id="dashTbl"></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 월별 리포트 ===== -->
+<div class="page" id="page-report">
+  <div id="r-login"><div class="al-wrap"><div class="card al-card">
+    <h2>🔐 관리자 로그인</h2><p>관리자 비밀번호를 입력하세요</p>
+    <input class="pw-input" type="password" id="pw2" placeholder="••••" onkeypress="if(event.key==='Enter')login(2)">
+    <button class="btn-login" onclick="login(2)">로그인</button>
+  </div></div></div>
+  <div id="r-content" style="display:none;">
+    <div class="m-nav">
+      <button class="btn btn-outline btn-sm" onclick="chMonth(-1)">◀ 이전달</button>
+      <h2 id="repTitle"></h2>
+      <button class="btn btn-outline btn-sm" onclick="chMonth(1)">다음달 ▶</button>
+      <button class="btn btn-success" onclick="dlExcel()">📥 엑셀 다운로드</button>
+    </div>
+    <div class="f-row" style="margin-bottom:16px;">
+      <select class="f-sel" id="rDept" onchange="renderReport()"><option value="">전체 부서</option></select>
+      <input class="f-inp" id="rName" placeholder="이름 검색" oninput="renderReport()" style="width:140px;">
+    </div>
+    <div class="card t-card"><div style="overflow-x:auto;">
+      <table><thead><tr><th>이름</th><th>부서</th><th>출근일수</th><th>정상</th><th>지각</th><th>조퇴</th><th>결근</th><th>총 근무시간</th><th>상세</th></tr></thead>
+      <tbody id="repTbl"></tbody></table>
+    </div></div>
+  </div>
+</div>
+
+<!-- ===== 직원 관리 ===== -->
+<div class="page" id="page-employees">
+  <div id="e-login"><div class="al-wrap"><div class="card al-card">
+    <h2>🔐 관리자 로그인</h2><p>관리자 비밀번호를 입력하세요</p>
+    <input class="pw-input" type="password" id="pw3" placeholder="••••" onkeypress="if(event.key==='Enter')login(3)">
+    <button class="btn-login" onclick="login(3)">로그인</button>
+  </div></div></div>
+  <div id="e-content" style="display:none;">
+    <div class="card af-card">
+      <h3>직원 추가</h3>
+      <div class="f-form-row">
+        <div class="fg"><label>이름 *</label><input type="text" id="nName" placeholder="홍길동"></div>
+        <div class="fg"><label>부서</label><input type="text" id="nDept" placeholder="개발팀"></div>
+        <button class="btn btn-primary" onclick="addEmp()" style="height:40px;align-self:end;">추가</button>
+      </div>
+    </div>
+    <div class="card t-card">
+      <div class="t-toolbar"><h3>직원 목록</h3><span id="empCnt" style="color:#718096;font-size:.83rem;"></span></div>
+      <div style="overflow-x:auto;">
+        <table><thead><tr><th>#</th><th>이름</th><th>부서</th><th>등록일</th><th>삭제</th></tr></thead>
+        <tbody id="empTbl"></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 설정 ===== -->
+<div class="page" id="page-settings">
+  <div id="s-login"><div class="al-wrap"><div class="card al-card">
+    <h2>🔐 관리자 로그인</h2><p>관리자 비밀번호를 입력하세요</p>
+    <input class="pw-input" type="password" id="pw4" placeholder="••••" onkeypress="if(event.key==='Enter')login(4)">
+    <button class="btn-login" onclick="login(4)">로그인</button>
+  </div></div></div>
+  <div id="s-content" style="display:none;">
+    <div class="card s-sec" style="margin-bottom:16px;">
+      <h3>⏱ 근무 시간 설정</h3>
+      <div class="s-row2"><label>출근 기준 시간 (이후 → 지각)</label><input type="time" id="sStart"></div>
+      <div class="s-row2"><label>퇴근 기준 시간 (이전 → 조퇴)</label><input type="time" id="sEnd"></div>
+      <div style="margin-top:14px;"><button class="btn btn-primary" onclick="saveSettings()">저장</button></div>
+    </div>
+    <div class="card s-sec" style="margin-bottom:16px;">
+      <h3>🔑 관리자 비밀번호 변경</h3>
+      <div class="s-row2"><label>현재 비밀번호</label><input type="password" id="curPw" placeholder="현재 비밀번호"></div>
+      <div class="s-row2"><label>새 비밀번호</label><input type="password" id="newPw" placeholder="새 비밀번호"></div>
+      <div class="s-row2"><label>새 비밀번호 확인</label><input type="password" id="conPw" placeholder="다시 입력"></div>
+      <div style="margin-top:14px;"><button class="btn btn-primary" onclick="changePw()">비밀번호 변경</button></div>
+    </div>
+    <div class="card s-sec" style="text-align:center;">
+      <button class="btn btn-gray" onclick="adminLogout()">🚪 로그아웃</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-ov" id="editMod">
+  <div class="modal">
+    <h3>✏️ 출퇴근 수동 수정</h3>
+    <input type="hidden" id="eEmpId"><input type="hidden" id="eDate">
+    <div class="fg"><label>출근 시간</label><input type="time" id="eIn"></div>
+    <div class="fg"><label>퇴근 시간</label><input type="time" id="eOut"></div>
+    <div class="fg"><label>상태</label>
+      <select id="eSt"><option>정상</option><option>지각</option><option>조퇴</option><option>결근</option><option>미퇴근</option></select>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-gray" onclick="closeMod('editMod')">취소</button>
+      <button class="btn btn-primary" onclick="saveEdit()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-ov" id="detMod">
+  <div class="modal" style="max-width:520px;">
+    <h3 id="detTitle"></h3>
+    <div id="detBody"></div>
+    <div class="modal-foot"><button class="btn btn-gray" onclick="closeMod('detMod')">닫기</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── STATE ───────────────────────────────
+let employees = [];
+let todayRecs = [];   // today's attendance records
+let repRecs   = [];   // report month's attendance records
+let settings  = { work_start:'09:00', work_end:'18:00' };
+let isAdmin   = false;
+let repMonth  = new Date();
+
+// ─── API HELPERS ─────────────────────────
+async function api(method, url, body) {
+  const opts = { method, headers:{'Content-Type':'application/json'} };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(url, opts);
+  return res.json();
+}
+const GET    = url        => api('GET',    url);
+const POST   = (url,b)   => api('POST',   url, b);
+const PUT    = (url,b)   => api('PUT',    url, b);
+const DEL    = url        => api('DELETE', url);
+
+// ─── INIT ─────────────────────────────────
+async function init() {
+  updateClock(); setInterval(updateClock, 1000);
+  renderDateStr();
+  const cfg = await GET('/api/settings');
+  settings = cfg;
+  employees = await GET('/api/employees');
+  populateEmpSel();
+  // Load today recs for check-in page
+  todayRecs = await GET('/api/attendance?date=' + getToday());
+}
+
+// ─── CLOCK ───────────────────────────────
+function updateClock() {
+  const n = new Date();
+  document.getElementById('liveTime').textContent = [n.getHours(),n.getMinutes(),n.getSeconds()].map(pad).join(':');
+}
+function pad(v) { return String(v).padStart(2,'0'); }
+function getToday() { const n=new Date(); return `${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())}`; }
+function getNow()   { const n=new Date(); return `${pad(n.getHours())}:${pad(n.getMinutes())}`; }
+function getMonthStr() { return `${repMonth.getFullYear()}-${pad(repMonth.getMonth()+1)}`; }
+
+function renderDateStr() {
+  const n=new Date(), days=['일','월','화','수','목','금','토'];
+  const s=`${n.getFullYear()}년 ${n.getMonth()+1}월 ${n.getDate()}일 (${days[n.getDay()]})`;
+  document.getElementById('todayStr').textContent = s;
+  document.getElementById('dashDate').textContent = s;
+}
+
+// ─── NAVIGATION ──────────────────────────
+function showPage(p) {
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  const map={checkin:0,dashboard:1,report:2,employees:3,settings:4};
+  document.querySelectorAll('.nav-btn')[map[p]].classList.add('active');
+  if (isAdmin) unlockAll();
+  if (p==='dashboard') loadAndRenderDash();
+  if (p==='report') { repMonth=new Date(); loadAndRenderReport(); }
+  if (p==='employees') renderEmps();
+  if (p==='settings') loadSettingsUI();
+}
+
+// ─── ADMIN AUTH ──────────────────────────
+async function login(n) {
+  const pw = document.getElementById('pw'+n).value;
+  const res = await POST('/api/admin/login', { password: pw });
+  document.getElementById('pw'+n).value = '';
+  if (res.ok) {
+    isAdmin = true; unlockAll(); updateHeader(); toast('관리자 로그인 성공 ✓');
+    const pages={1:'dashboard',2:'report',3:'employees',4:'settings'};
+    if (pages[n]==='dashboard')  loadAndRenderDash();
+    if (pages[n]==='report')     loadAndRenderReport();
+    if (pages[n]==='employees')  renderEmps();
+    if (pages[n]==='settings')   loadSettingsUI();
+  } else { toast(res.error || '비밀번호가 올바르지 않습니다'); }
+}
+function unlockAll() {
+  ['d','r','e','s'].forEach(k => {
+    const l=document.getElementById(k+'-login'), c=document.getElementById(k+'-content');
+    if(l) l.style.display='none';
+    if(c) c.style.display='block';
+  });
+}
+function adminLogout() { isAdmin=false; updateHeader(); location.reload(); }
+function updateHeader() {
+  const r=document.getElementById('headerRight');
+  if (isAdmin) {
+    r.innerHTML='<span class="admin-badge">관리자 모드</span><div class="live-time" id="liveTime">00:00:00</div><button class="logout-btn" onclick="adminLogout()">로그아웃</button>';
+  } else {
+    r.innerHTML='<div class="live-time" id="liveTime">00:00:00</div>';
+  }
+}
+
+// ─── EMPLOYEE SELECT ─────────────────────
+function populateEmpSel() {
+  const sel=document.getElementById('empSel'), cur=sel.value;
+  sel.innerHTML='<option value="">-- 이름을 선택하세요 --</option>';
+  [...employees].sort((a,b)=>a.name.localeCompare(b.name,'ko')).forEach(e=>{
+    const o=document.createElement('option');
+    o.value=e.id; o.textContent=e.name+(e.department?` (${e.department})`:'');
+    sel.appendChild(o);
+  });
+  if(cur) sel.value=cur;
+}
+
+async function onEmpChange() {
+  const id=document.getElementById('empSel').value;
+  const btnIn=document.getElementById('btnIn'), btnOut=document.getElementById('btnOut');
+  const doneMsg=document.getElementById('doneMsg'), box=document.getElementById('statusBox');
+  btnIn.style.display='block'; btnOut.style.display='none'; doneMsg.style.display='none'; box.style.display='none';
+  btnIn.className='btn-act '+(id?'btn-in':'btn-dis');
+
+  if (!id) return;
+  todayRecs = await GET('/api/attendance?date='+getToday());
+  const rec = todayRecs.find(r=>r.employee_id==id);
+
+  if (!rec) {
+    // 미출근
+  } else if (rec.check_in && !rec.check_out) {
+    box.style.display='block';
+    document.getElementById('dIn').textContent=rec.check_in;
+    document.getElementById('dOut').textContent='-';
+    document.getElementById('dSt').innerHTML=badge('미퇴근');
+    btnIn.style.display='none'; btnOut.style.display='block';
+  } else if (rec.check_in && rec.check_out) {
+    box.style.display='block';
+    document.getElementById('dIn').textContent=rec.check_in;
+    document.getElementById('dOut').textContent=rec.check_out;
+    document.getElementById('dSt').innerHTML=badge(rec.status);
+    btnIn.style.display='none'; doneMsg.style.display='block';
+  }
+}
+
+async function doCheckIn() {
+  const id=document.getElementById('empSel').value;
+  if (!id) { toast('직원을 선택해주세요'); return; }
+  const res=await POST('/api/attendance/checkin',{employee_id:+id,date:getToday(),time:getNow()});
+  if (res.ok) { const e=employees.find(x=>x.id==id); toast(`${e.name}님 출근! (${getNow()})`); onEmpChange(); }
+  else toast(res.error||'오류가 발생했습니다');
+}
+async function doCheckOut() {
+  const id=document.getElementById('empSel').value;
+  if (!id) return;
+  const res=await POST('/api/attendance/checkout',{employee_id:+id,date:getToday(),time:getNow()});
+  if (res.ok) { const e=employees.find(x=>x.id==id); toast(`${e.name}님 퇴근! (${getNow()}) — ${res.status}`); onEmpChange(); }
+  else toast(res.error||'오류가 발생했습니다');
+}
+
+// ─── DASHBOARD ───────────────────────────
+async function loadAndRenderDash() {
+  if (!isAdmin) return;
+  todayRecs = await GET('/api/attendance?date='+getToday());
+  fillDeptFilter('dDept');
+  renderDash();
+}
+function renderDash() {
+  if (!isAdmin) return;
+  const dF=document.getElementById('dDept').value, sF=document.getElementById('dStat').value;
+  let present=0,late=0,absent=0,notYet=0,earlyLeave=0;
+  employees.forEach(e=>{
+    const r=todayRecs.find(x=>x.employee_id==e.id);
+    if (!r) notYet++;
+    else if(r.status==='정상') present++;
+    else if(r.status==='지각') late++;
+    else if(r.status==='조퇴') earlyLeave++;
+    else if(r.status==='결근') absent++;
+    else present++;
+  });
+  document.getElementById('statsGrid').innerHTML=`
+    <div class="stat-card sc-total"><div class="stat-num">${employees.length}</div><div class="stat-lbl">전체 직원</div></div>
+    <div class="stat-card sc-present"><div class="stat-num">${present}</div><div class="stat-lbl">출근 완료</div></div>
+    <div class="stat-card sc-late"><div class="stat-num">${late}</div><div class="stat-lbl">지각</div></div>
+    <div class="stat-card sc-absent"><div class="stat-num">${absent}</div><div class="stat-lbl">결근</div></div>
+    <div class="stat-card sc-notyet"><div class="stat-num">${notYet}</div><div class="stat-lbl">미출근</div></div>`;
+  let rows='';
+  employees.filter(e=>!dF||e.department===dF).sort((a,b)=>a.name.localeCompare(b.name,'ko')).forEach(e=>{
+    const r=todayRecs.find(x=>x.employee_id==e.id), st=r?r.status:'출근전';
+    if(sF&&st!==sF) return;
+    const ci=r?.check_in||'-', co=r?.check_out||'-';
+    const wh=(r?.check_in&&r?.check_out)?workHr(r.check_in,r.check_out):'-';
+    rows+=`<tr><td><strong>${e.name}</strong></td><td>${e.department||'-'}</td>
+      <td>${ci}</td><td>${co}</td><td>${wh}</td><td>${badge(st)}</td>
+      <td><div class="btn-grp">
+        <button class="btn btn-primary btn-sm" onclick="openEdit(${e.id},'${getToday()}')">수정</button>
+        ${!r?`<button class="btn btn-danger btn-sm" onclick="markAbsent(${e.id})">결근</button>`:''}
+      </div></td></tr>`;
+  });
+  document.getElementById('dashTbl').innerHTML=rows||'<tr class="empty"><td colspan="7">데이터가 없습니다</td></tr>';
+}
+async function markAbsent(empId) {
+  await PUT('/api/attendance/update',{employee_id:empId,date:getToday(),check_in:null,check_out:null,status:'결근'});
+  toast('결근 처리되었습니다'); loadAndRenderDash();
+}
+
+// ─── EDIT MODAL ──────────────────────────
+function openEdit(empId, date) {
+  const r=todayRecs.find(x=>x.employee_id==empId&&x.date===date)||repRecs.find(x=>x.employee_id==empId&&x.date===date);
+  document.getElementById('eEmpId').value=empId; document.getElementById('eDate').value=date;
+  document.getElementById('eIn').value=r?.check_in||''; document.getElementById('eOut').value=r?.check_out||'';
+  document.getElementById('eSt').value=r?.status||'정상';
+  openMod('editMod');
+}
+async function saveEdit() {
+  const empId=+document.getElementById('eEmpId').value, date=document.getElementById('eDate').value;
+  const ci=document.getElementById('eIn').value, co=document.getElementById('eOut').value;
+  const st=document.getElementById('eSt').value;
+  await PUT('/api/attendance/update',{employee_id:empId,date,check_in:ci||null,check_out:co||null,status:st});
+  closeMod('editMod'); toast('수정되었습니다');
+  loadAndRenderDash();
+}
+
+// ─── REPORT ──────────────────────────────
+async function loadAndRenderReport() {
+  if (!isAdmin) return;
+  repRecs = await GET('/api/attendance?month='+getMonthStr());
+  fillDeptFilter('rDept');
+  renderReport();
+}
+function renderReport() {
+  if (!isAdmin) return;
+  document.getElementById('repTitle').textContent=`${repMonth.getFullYear()}년 ${repMonth.getMonth()+1}월`;
+  const dF=document.getElementById('rDept').value, nF=document.getElementById('rName').value.toLowerCase();
+  let rows='';
+  employees.filter(e=>!dF||e.department===dF).filter(e=>!nF||e.name.toLowerCase().includes(nF))
+    .sort((a,b)=>a.name.localeCompare(b.name,'ko')).forEach(e=>{
+      const recs=repRecs.filter(r=>r.employee_id==e.id);
+      const days=recs.filter(r=>r.check_in).length;
+      const 정상=recs.filter(r=>r.status==='정상').length, 지각=recs.filter(r=>r.status==='지각').length;
+      const 조퇴=recs.filter(r=>r.status==='조퇴').length, 결근=recs.filter(r=>r.status==='결근').length;
+      let totalMin=0; recs.forEach(r=>{ if(r.check_in&&r.check_out) totalMin+=toMin(r.check_out)-toMin(r.check_in); });
+      const th=Math.floor(totalMin/60), tm=totalMin%60, ts=totalMin>0?`${th}h ${tm}m`:'-';
+      rows+=`<tr><td><strong>${e.name}</strong></td><td>${e.department||'-'}</td><td>${days}일</td>
+        <td><span class="badge b-정상">${정상}</span></td><td><span class="badge b-지각">${지각}</span></td>
+        <td><span class="badge b-조퇴">${조퇴}</span></td><td><span class="badge b-결근">${결근}</span></td>
+        <td>${ts}</td><td><button class="btn btn-outline btn-sm" onclick="showDetail(${e.id})">상세</button></td></tr>`;
+    });
+  document.getElementById('repTbl').innerHTML=rows||'<tr class="empty"><td colspan="9">데이터 없음</td></tr>';
+}
+function chMonth(d) { repMonth.setMonth(repMonth.getMonth()+d); loadAndRenderReport(); }
+
+function showDetail(empId) {
+  const e=employees.find(x=>x.id==empId);
+  const recs=repRecs.filter(r=>r.employee_id==empId).sort((a,b)=>a.date.localeCompare(b.date));
+  document.getElementById('detTitle').textContent=`${e.name} — ${getMonthStr()} 상세`;
+  let html='<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.85rem;">';
+  html+='<thead><tr style="background:#f7fafc;"><th style="padding:9px;text-align:left;">날짜</th><th style="padding:9px;text-align:center;">출근</th><th style="padding:9px;text-align:center;">퇴근</th><th style="padding:9px;text-align:center;">근무시간</th><th style="padding:9px;text-align:center;">상태</th></tr></thead><tbody>';
+  if(!recs.length) html+='<tr><td colspan="5" style="text-align:center;padding:20px;color:#a0aec0;">기록 없음</td></tr>';
+  recs.forEach(r=>{
+    const wh=(r.check_in&&r.check_out)?workHr(r.check_in,r.check_out):'-';
+    html+=`<tr style="border-bottom:1px solid #f0f4f8;"><td style="padding:9px;">${r.date}</td>
+      <td style="padding:9px;text-align:center;">${r.check_in||'-'}</td>
+      <td style="padding:9px;text-align:center;">${r.check_out||'-'}</td>
+      <td style="padding:9px;text-align:center;">${wh}</td>
+      <td style="padding:9px;text-align:center;">${badge(r.status)}</td></tr>`;
+  });
+  html+='</tbody></table></div>';
+  document.getElementById('detBody').innerHTML=html; openMod('detMod');
+}
+
+// ─── EXCEL ───────────────────────────────
+function dlExcel() {
+  const ms=getMonthStr(), y=repMonth.getFullYear(), m=repMonth.getMonth()+1;
+  const sum=[['이름','부서','출근일수','정상','지각','조퇴','결근','총근무시간(분)']];
+  employees.sort((a,b)=>a.name.localeCompare(b.name,'ko')).forEach(e=>{
+    const recs=repRecs.filter(r=>r.employee_id==e.id);
+    let totalMin=0; recs.forEach(r=>{ if(r.check_in&&r.check_out) totalMin+=toMin(r.check_out)-toMin(r.check_in); });
+    sum.push([e.name,e.department||'',recs.filter(r=>r.check_in).length,
+      recs.filter(r=>r.status==='정상').length,recs.filter(r=>r.status==='지각').length,
+      recs.filter(r=>r.status==='조퇴').length,recs.filter(r=>r.status==='결근').length,totalMin]);
+  });
+  const det=[['이름','부서','날짜','출근시간','퇴근시간','근무시간(분)','상태']];
+  repRecs.sort((a,b)=>a.date.localeCompare(b.date)).forEach(r=>{
+    const e=employees.find(x=>x.id==r.employee_id); if(!e) return;
+    let mins=0; if(r.check_in&&r.check_out) mins=toMin(r.check_out)-toMin(r.check_in);
+    det.push([e.name,e.department||'',r.date,r.check_in||'',r.check_out||'',mins||'',r.status]);
+  });
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sum),`${m}월 요약`);
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(det),`${m}월 상세`);
+  XLSX.writeFile(wb,`출퇴근_${y}년_${m}월.xlsx`);
+  toast('엑셀 다운로드 완료 📥');
+}
+
+// ─── EMPLOYEES ───────────────────────────
+function renderEmps() {
+  if (!isAdmin) return;
+  const sorted=[...employees].sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+  let rows='';
+  sorted.forEach((e,i)=>{ rows+=`<tr><td>${i+1}</td><td><strong>${e.name}</strong></td><td>${e.department||'-'}</td><td>${e.join_date||'-'}</td><td><button class="btn btn-danger btn-sm" onclick="delEmp(${e.id})">삭제</button></td></tr>`; });
+  document.getElementById('empTbl').innerHTML=rows||'<tr class="empty"><td colspan="5">직원이 없습니다</td></tr>';
+  document.getElementById('empCnt').textContent=`총 ${employees.length}명`;
+  fillDeptFilter('dDept'); fillDeptFilter('rDept');
+}
+async function addEmp() {
+  const name=document.getElementById('nName').value.trim(), dept=document.getElementById('nDept').value.trim();
+  if (!name) { toast('이름을 입력해주세요'); return; }
+  const res=await POST('/api/employees',{name,department:dept});
+  if (res.ok) {
+    employees=await GET('/api/employees');
+    populateEmpSel(); renderEmps();
+    document.getElementById('nName').value=''; document.getElementById('nDept').value='';
+    toast(`${name}님이 추가되었습니다`);
+  } else toast(res.error||'오류가 발생했습니다');
+}
+async function delEmp(id) {
+  if (!confirm('삭제하시겠습니까? 해당 직원의 출퇴근 기록도 삭제됩니다.')) return;
+  await DEL('/api/employees/'+id);
+  employees=await GET('/api/employees');
+  populateEmpSel(); renderEmps(); toast('삭제되었습니다');
+}
+
+// ─── SETTINGS ────────────────────────────
+async function loadSettingsUI() {
+  const cfg=await GET('/api/settings');
+  settings=cfg;
+  document.getElementById('sStart').value=cfg.work_start;
+  document.getElementById('sEnd').value=cfg.work_end;
+}
+async function saveSettings() {
+  const s=document.getElementById('sStart').value, e=document.getElementById('sEnd').value;
+  await PUT('/api/settings',{work_start:s,work_end:e});
+  settings.work_start=s; settings.work_end=e;
+  toast('설정이 저장되었습니다');
+}
+async function changePw() {
+  const cur=document.getElementById('curPw').value, nw=document.getElementById('newPw').value, con=document.getElementById('conPw').value;
+  const check=await POST('/api/admin/login',{password:cur});
+  if (!check.ok) { toast('현재 비밀번호가 틀렸습니다'); return; }
+  if (!nw)       { toast('새 비밀번호를 입력해주세요'); return; }
+  if (nw!==con)  { toast('비밀번호가 일치하지 않습니다'); return; }
+  await PUT('/api/settings',{admin_pw:nw});
+  ['curPw','newPw','conPw'].forEach(id=>document.getElementById(id).value='');
+  toast('비밀번호가 변경되었습니다');
+}
+
+// ─── HELPERS ─────────────────────────────
+function badge(st) { return `<span class="badge b-${st}">${st}</span>`; }
+function toMin(t)  { const [h,m]=t.split(':').map(Number); return h*60+m; }
+function workHr(ci,co) { const m=toMin(co)-toMin(ci); if(m<=0) return '-'; return `${Math.floor(m/60)}시간 ${m%60}분`; }
+function fillDeptFilter(selId) {
+  const sel=document.getElementById(selId); if(!sel) return;
+  const cur=sel.value, depts=[...new Set(employees.map(e=>e.department).filter(Boolean))].sort();
+  sel.innerHTML='<option value="">전체 부서</option>';
+  depts.forEach(d=>{ const o=document.createElement('option'); o.value=d; o.textContent=d; sel.appendChild(o); });
+  sel.value=cur;
+}
+function openMod(id)  { document.getElementById(id).classList.add('open'); }
+function closeMod(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-ov').forEach(ov=>ov.addEventListener('click',e=>{ if(e.target===ov) ov.classList.remove('open'); }));
+
+let toastTid;
+function toast(msg) {
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTid); toastTid=setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+init();
+</script>
+</body>
+</html>
